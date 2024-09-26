@@ -2,5 +2,49 @@
 
 This Assignment is a backend API web application developed with Node.js and MySQL, featuring a health check endpoint (`/healthz`) that verifies the MySQL database connection by returning `200 OK` if the application is healthy and `503 Service Unavailable` if it is not. The health check functionality allows for proactive monitoring of the application's status, ensuring that traffic is routed only to healthy instances, and it can be easily tested using Postman with simple GET requests. 
 
-Programming Language: Node.js
-Database: MySQL
+Prerequisites for Local Development and Deployment
+To successfully build and deploy the application on your local machine, please ensure you have the following software and tools installed:
+
+1. Node.js: You’ll need Node.js version 14 or later. Download it from the official Node.js website.
+2. MySQL: Install MySQL Server version 5.7 or later. Ensure that the MySQL service is running and accessible.
+3. Postman: For API testing, it's recommended to use Postman, which you can download from postman.com.
+4. Git: Install Git for version control. Get it from git-scm.com.
+
+Instructions for Building and Deploying the Application
+
+Follow these steps to build and deploy the application locally:
+
+1. Clone the Repository:  
+   Open your terminal and execute the following command to clone the repository:
+   git clone https://github.com/your_username/webapp.git
+   cd webapp
+
+2. Install Dependencies:  
+   Navigate to the project directory and install the necessary Node.js dependencies:
+   npm install
+   
+3. Set Up Environment Variables:  
+   Create a `.env` file in the project root directory to configure your MySQL database settings.
+
+4. Start the Application:  
+   Launch the application by running:
+   node index.js
+
+5. Test the Health Check Endpoint:  
+   Open Postman and create a new GET request:
+
+    Select GET as the method and enter http://localhost:3000/healthz as the URL.
+    Send the request:
+    If the application is healthy and connected to the MySQL database, you will receive a 200 OK response with no payload.
+    If the application cannot connect to the MySQL database, a 503 Service Unavailable response will be returned.
+
+    Example of Successful Request:
+    URL: http://localhost:3000/healthz
+    Response: 200 OK
+
+    Example of Failure:
+    URL: http://localhost:3000/healthz
+    Response: 503 Service Unavailable
+
+6. Stop the Application:  
+   To stop the running application, return to your terminal and press `Ctrl + C`.
