@@ -2,6 +2,11 @@
 
 This Assignment is a backend API web application developed with Node.js and MySQL, featuring a health check endpoint (`/healthz`) that verifies the MySQL database connection by returning `200 OK` if the application is healthy and `503 Service Unavailable` if it is not. The health check functionality allows for proactive monitoring of the application's status, ensuring that traffic is routed only to healthy instances, and it can be easily tested using Postman with simple GET requests. 
 
+Health Check Endpoint: /healthz to monitor the MySQL database and downstream API status.
+User Registration: Create new users by posting to /v1/users.
+User Authentication: Basic authentication using email and password.
+User Data Management: Retrieve and update user data via /v1/users/self.
+
 Prerequisites for Local Development and Deployment
 To successfully build and deploy the application on your local machine, please ensure you have the following software and tools installed:
 
@@ -45,6 +50,36 @@ Follow these steps to build and deploy the application locally:
     Example of Failure:
     URL: http://localhost:3000/healthz
     Response: 503 Service Unavailable
+
+6. User Registration
+   To create a new user:
+
+   URL: http://localhost:3000/v1/users
+   Method: POST
+   Body:
+   {json} 
+   Response: 201 Created on success
+   400 Bad Request for validation errors (e.g., existing email or invalid password).
+
+   Get User Data (Authenticated) (requires basic authentication):
+   
+   URL: http://localhost:3000/v1/users/self
+   Method: GET
+   Auth: Basic Auth (use email and password)
+   Response: 200 on success
+
+   Update User Data (Authenticated)
+
+   URL: http://localhost:3000/v1/users/self
+   Method: PUT
+   Auth: Basic Auth (use email and password)
+   Body:
+   Response: 200 OK on successful update.
+
+   Running Tests: 
+   To run tests:
+   npm test
+
 
 6. Stop the Application:  
    To stop the running application, return to your terminal and press `Ctrl + C`.
