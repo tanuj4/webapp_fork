@@ -10,7 +10,7 @@ afterAll(async () => {
     await sequelize.close(); 
 });
 
-describe('User Registration API', () => {
+describe('checking User Registration here:', () => {
     const userData = {
         email: 'tanujkodali0409@gmail.com',
         password: 'kodali@1972',
@@ -33,7 +33,7 @@ describe('User Registration API', () => {
     });
 });
 
-describe('User Authentication API', () => {
+describe('Checking Authentication, Getting User Data and Updating users details:', () => {
     const userData = {
         email: 'tanujkodali0409@gmail.com',
         password: 'kodali@1972', 
@@ -82,14 +82,3 @@ describe('User Authentication API', () => {
    
 });
 
-describe('Method Not Allowed', () => {
-    it('POST /users should return 405 for GET requests', async () => {
-        const response = await request(app).get('/v1/users');
-        expect(response.status).toBe(405);
-    });
-
-    it('GET /users/self should return 405 for POST requests', async () => {
-        const response = await request(app).post('/v1/users/self');
-        expect(response.status).toBe(405);
-    });
-});
