@@ -1,12 +1,15 @@
-name: Node.js CI
+name: Integration CI
 
 on:
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
-  build:
+  test:
+    name: Integrate CI 
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v4
-    
+      - name: Checkout repository
+        uses: actions/checkout@v4
