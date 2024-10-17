@@ -1,0 +1,44 @@
+name: Packer Validation
+
+on:
+  pull_request:
+    branches:
+     - main
+
+jobs:
+  validate:
+    name: Validate Packer Template
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Zip Web App
+        run: zip -r webapp.zip ./
+
+      - name: List files
+        run: ls
+
+      - name: Install Packer
+        uses: hashicorp/setup-packer@main
+        
+
+      - name: Initialize Packer
+        run: packer init .
+       
+      - name: Packer Format Check
+        run: packer fmt -check main.pkr.hcl
+
+      - name: Packer Validate
+        run: packer validate main.pkr.hcl
+          
+      - name: Check for errors
+        run: |
+          if [[ $? -eq 0 ]]; then
+            echo "Packer template formatting and validation succeeded."
+          else
+            echo "Packer template formatting or validation failed."
+            exit 1
+          fi
