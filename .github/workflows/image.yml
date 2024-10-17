@@ -1,0 +1,65 @@
+
+name: Build AMI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      # Step 2: Set up AWS credentials
+      - name: Set up AWS credentials
+        run: |
+          mkdir -p ~/.aws
+          echo "[default]" > ~/.aws/credentials
+          echo "aws_access_key_id = ${{ secrets.AWS_ACCESS_KEY_ID }}" >> ~/.aws/credentials
+          echo "aws_secret_access_key = ${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> ~/.aws/credentials
+
+      # Step 3: Setting up Packer
+      - name: Setting up Packer
+        run: |
+          wget https://releases.hashicorp.com/packer/1.7.3/packer_1.7.3_linux_amd64.zip
+          unzip -o packer_1.7.3_linux_amd64.zip
+          chmod +x packer
+          sudo mv packer /usr/local/bin/
+
+      # Step 4: Initializing Packer
+      - name: Initializing Packer
+        run: packer init ./main.pkr.hcl
+
+      # Step 5: Building the Image
+      - name: Build the Image
+        run: |
+          packer build \
+            -var "aws_region=${{ secrets.AWS_REGION }}" \
+            -var "vpc_id=${{ secrets.VPC_ID }}" \
+            -var "subnet_id=${{ secrets.SUBNET_ID }}" \
+            -var "DB_USER=${{ secrets.DB_USER }}" \
+            -var "DB_ROOT_PASSWORD=${{ secrets.DB_ROOT_PASSWORD }}" \
+            -var "DB_USER_PASSWORD=${{ secrets.DB_USER_PASSWORD }}" \
+            -var "DB_NAME=${{ secrets.DB_NAME }}" \
+            ./main.pkr.hcl
+
+      # Step 6: Fetch the Image Name
+      - name: Fetch the Image Name
+        run: |          
+          MY_MI=$(jq -r '.builds[0].artifact_id' image_manifest.json)
+          echo "MY_MI=$MY_MI" >> $GITHUB_ENV
+
+      # Step 7: Generate Template Name with Timestamp
+      - name: Generate Template Name with Timestamp
+        id: generate-timestamp
+        run: |
+          echo "TNAME=webapp-ami-$(date +%Y-%m-%d-%H-%M-%S)" >> $GITHUB_ENV
+
+
+
+            
