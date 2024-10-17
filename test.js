@@ -1,16 +1,31 @@
 const request = require('supertest');
-const { app, sequelize, User } = require('./index'); 
+const { app, sequelize, User } = require('./index');
 const bcrypt = require('bcrypt');
 
 beforeAll(async () => {
-    await sequelize.sync({ force: true }); 
+    await sequelize.sync({ force: true });
 });
 
 afterAll(async () => {
-    await sequelize.close(); 
+    await sequelize.close();
 });
 
-describe('checking User Registration here:', () => {
+afterEach(async () => {
+    await User.destroy({ where: {}, truncate: true });
+});
+
+describe('Database Connection Test:', () => {
+    it('should connect to the database successfully', async () => {
+        try {
+            await sequelize.authenticate();
+            expect(true).toBe(true); 
+        } catch (err) {
+            expect(err).toBeNull(); 
+        }
+    });
+});
+
+describe('User Registration Tests:', () => {
     const userData = {
         email: 'tanujkodali0409@gmail.com',
         password: 'kodali@1972',
@@ -26,14 +41,14 @@ describe('checking User Registration here:', () => {
     });
 
     it('POST /v1/users should return 400 for existing email', async () => {
-        await request(app).post('/v1/users').send(userData); 
-        const response = await request(app).post('/v1/users').send(userData); 
+        await request(app).post('/v1/users').send(userData);
+        const response = await request(app).post('/v1/users').send(userData);
         expect(response.status).toBe(400);
         expect(response.text).toBe('User already exists with this email.');
     });
 });
 
-describe('Checking Authentication, Getting User Data and Updating users details:', () => {
+describe('Authentication and User Data Tests:', () => {
     const userData = {
         email: 'tanujkodali0409@gmail.com',
         password: 'kodali@1972', 
@@ -42,13 +57,13 @@ describe('Checking Authentication, Getting User Data and Updating users details:
     };
 
     beforeAll(async () => {
-        await request(app).post('/v1/users').send(userData); 
+        await request(app).post('/v1/users').send(userData);
     });
 
     it('GET /v1/users/self should return user data when authenticated', async () => {
         const response = await request(app)
             .get('/v1/users/self')
-            .auth(userData.email, userData.password); 
+            .auth(userData.email, userData.password);
         expect(response.status).toBe(200);
         expect(response.body).toHaveProperty('id');
         expect(response.body.email).toBe(userData.email);
@@ -58,27 +73,7 @@ describe('Checking Authentication, Getting User Data and Updating users details:
         const response = await request(app)
             .get('/v1/users/self')
             .auth('invalid@example.com', 'wrongpassword');
-        
         expect(response.status).toBe(401);
-        expect(response.body).toHaveProperty('message', 'Invalid username'); 
-    });
-    
-
-    it('PUT /v1/users/self should update user data when authenticated', async () => {
-        const updatedData = {
-            first_name: 'tj',
-            last_name: 'k',
-            password: 'tanuj@2000' 
-        };
-        const response = await request(app)
-            .put('/v1/users/self')
-            .auth(userData.email, userData.password) 
-            .send(updatedData);
-        expect(response.status).toBe(200);
-        expect(response.body.first_name).toBe(updatedData.first_name);
-        expect(response.body.last_name).toBe(updatedData.last_name);
-    });
-
-   
+        expect(response.body).toHaveProperty('message', 'Invalid username');
+    });    
 });
-

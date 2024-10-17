@@ -1,0 +1,18 @@
+[Unit]
+Description=CSYE6225 Web App
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /home/csye6225/webapp/index.js
+WorkingDirectory=/home/csye6225/webapp
+Restart=always
+User=csye6225
+Group=csye6225
+Environment=NODE_ENV=development
+Environment=PORT=8080
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=webapp
+
+[Install]
+WantedBy=multi-user.target
