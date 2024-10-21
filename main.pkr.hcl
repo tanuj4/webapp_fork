@@ -9,7 +9,7 @@ packer {
 
 # Variables
 variable "aws_region" {
-  description     =    "AWS region to create AMI"
+  description = "AWS region to create AMI"
   default     = "us-east-1"
 }
 
@@ -65,7 +65,7 @@ variable "DB_NAME" {
 
 # AWS AMI Source Block
 source "amazon-ebs" "ubuntu-webapp" {
-  region                      = var.aws_region
+  region                      = varR.aws_region
   source_ami                  = var.source_ami
   instance_type               = var.instance_type
   ami_name                    = "${var.ami_name}-${formatdate("YYYY-MM-DD-HH-mm-ss", timestamp())}"
