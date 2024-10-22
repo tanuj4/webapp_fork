@@ -128,3 +128,7 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+.image_manifest.json
+.image_manifest.json
+.webapp.zip

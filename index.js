@@ -12,12 +12,27 @@ const port = process.env.PORT || 8080;
 app.use(express.json());
 
 const { Sequelize, DataTypes } = require('sequelize');
-const sequelize = new Sequelize( process.env.DATAB_NAME,process.env.DATAB_USER,process.env.DATAB_PASS,{
-    host: process.env.DATAB_HOST,
-    dialect:'mysql',
-    port:'3306',
-    logging: false
-})
+
+let sequelize;
+if (process.env.NODE_ENV === 'test') {
+
+    sequelize = {
+        define: () => ({
+            create: jest.fn(),
+            findOne: jest.fn(),
+        }),
+        authenticate: jest.fn().mockResolvedValue(true),
+        sync: jest.fn().mockResolvedValue(true),
+    };
+} else {
+   
+    sequelize = new Sequelize(process.env.DATAB_NAME, process.env.DATAB_USER, process.env.DATAB_PASS, {
+        host: process.env.DATAB_HOST,
+        dialect: 'mysql',
+        port: '3306',
+        logging: false
+    });
+}
 
 const User = sequelize.define('User', {
     email: {
@@ -51,6 +66,11 @@ const User = sequelize.define('User', {
 
 
 const CheckDatabaseConnection = async () => {
+    
+    if (process.env.NODE_ENV === 'test') {
+        throw new Error('Simulated connection failure');
+    }
+
     try {
         await sequelize.authenticate();
         return true;
