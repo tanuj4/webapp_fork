@@ -37,10 +37,10 @@ jest.mock('./index', () => {
 describe('User API Tests', () => {
     it('should create a new user successfully', async () => {
         const newUser = {
-            email: 'test@example.com',
-            password: 'password123',
-            first_name: 'Test',
-            last_name: 'User',
+            email: 'tanujkodali0409@gmail.com',
+            password: 'Kodali@1972',
+            first_name: 'Tanuj',
+            last_name: 'Kodali',
         };
 
         
@@ -65,10 +65,10 @@ describe('User API Tests', () => {
 
     it('should return 400 if user already exists', async () => {
         const existingUser = {
-            email: 'test@example.com',
-            password: 'password123',
-            first_name: 'Test',
-            last_name: 'User',
+            email: 'tanujkodali0409@gmail.com',
+            password: 'Kodali@1972',
+            first_name: 'Tanuj',
+            last_name: 'Kodali',
         };
 
         
