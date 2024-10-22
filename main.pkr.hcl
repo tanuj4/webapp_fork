@@ -43,26 +43,6 @@ variable "ssh_username" {
   default     = "ubuntu"
 }
 
-variable "DB_USER" {
-  description = "MySQL database username"
-  default     = "root"
-}
-
-variable "DB_ROOT_PASSWORD" {
-  description = "MySQL root password"
-  default     = "Kodali@1972"
-}
-
-variable "DB_USER_PASSWORD" {
-  description = "MySQL user password"
-  default     = "Kodali@1972"
-}
-
-variable "DB_NAME" {
-  description = "MySQL database name"
-  default     = "test"
-}
-
 # AWS AMI Source Block
 source "amazon-ebs" "ubuntu-webapp" {
   region                      = var.aws_region
@@ -92,12 +72,6 @@ build {
   }
 
   provisioner "shell" {
-    environment_vars = [
-      "DB_NAME=${var.DB_NAME}",
-      "DB_ROOT_PASSWORD=${var.DB_ROOT_PASSWORD}",
-      "DB_USER_PASSWORD=${var.DB_USER_PASSWORD}",
-      "DB_USER=${var.DB_USER}"
-    ]
     script = "scripts/setup.sh"
   }
 

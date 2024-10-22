@@ -1,0 +1,14 @@
+{
+  "builds": [
+    {
+      "name": "ubuntu-webapp",
+      "builder_type": "amazon-ebs",
+      "build_time": 1729622928,
+      "files": null,
+      "artifact_id": "us-east-1:ami-04bca3e38deffb674",
+      "packer_run_uuid": "a426bf8f-2594-767c-d5ad-f6e555138576",
+      "custom_data": null
+    }
+  ],
+  "last_run_uuid": "a426bf8f-2594-767c-d5ad-f6e555138576"
+}
