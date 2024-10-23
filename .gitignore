@@ -129,6 +129,7 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
+#unwanted files
 .image_manifest.json
 .image_manifest.json
 .webapp.zip
