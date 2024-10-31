@@ -130,7 +130,7 @@ const Image = sequelize.define('Image', {
 
 
 const s3 = new S3Client({
-    region: 'process.env.AWS_REGION', 
+    region: process.env.AWS_REGION, 
 });
 
 const upload = multer({
@@ -601,6 +601,9 @@ app.delete('/v1/user/self/pic', Authenticateuser, async (req, res) => {
     }
 });
 
+app.all('/v1/user/self/pic', (req, res) => {
+    res.sendStatus(405); 
+});
 
 
 app.listen(port, async () => {
