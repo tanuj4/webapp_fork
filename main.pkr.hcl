@@ -79,7 +79,7 @@ build {
     script = "scripts/webapp.sh"
   }
 
-    provisioner "shell" {
+  provisioner "shell" {
     script = "scripts/cloudwatch.sh"
   }
 
