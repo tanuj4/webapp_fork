@@ -20,7 +20,7 @@ variable "ami_name" {
 
 variable "source_ami" {
   description = "The source AMI ID for Ubuntu 24.04 LTS"
-  default     = "ami-071f22dd23c0a7d0d"
+  default     = "ami-008d819eefb4b5ee4"
 }
 
 variable "instance_type" {
@@ -77,6 +77,10 @@ build {
 
   provisioner "shell" {
     script = "scripts/webapp.sh"
+  }
+
+  provisioner "shell" {
+    script = "scripts/cloudwatch.sh"
   }
 
   post-processor "manifest" {
