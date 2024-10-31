@@ -450,42 +450,32 @@ app.all('/v1/users/self', (req, res) => {
         res.status(405).send();  
     }
 });
+
 app.post('/v1/user/self/pic', Authenticateuser, upload.single('profilePic'), async (req, res) => {
     const userId = req.user.id;
     const file = req.file;
     const start = Date.now(); 
+
     
-
     if (!file) {
         return res.status(400).json({ message: 'No file uploaded.' });
     }
 
+   
     const allowedFileTypes = ['image/jpeg', 'image/png', 'image/jpg'];
     if (!allowedFileTypes.includes(file.mimetype)) {
         return res.status(400).json({ message: 'Invalid file type. Only JPEG, PNG, and JPG are allowed.' });
     }
 
     try {
-        app.post('/v1/user/self/pic', Authenticateuser, upload.single('profilePic'), async (req, res) => {
-    const userId = req.user.id;
-    const file = req.file;
-
-    if (!file) {
-        return res.status(400).json({ message: 'No file uploaded.' });
-    }
-
-    const allowedFileTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-    if (!allowedFileTypes.includes(file.mimetype)) {
-        return res.status(400).json({ message: 'Invalid file type. Only JPEG, PNG, and JPG are allowed.' });
-    }
-
-    try {
+       
         const existingImage = await Image.findOne({ where: { id: userId } });
 
         if (existingImage) {
+            
             return res.status(400).json({ message: 'Please delete your existing profile picture before uploading a new one.' });
         } else {
-           
+            
             const newImage = await Image.create({
                 id: userId,
                 url: file.location,
@@ -494,6 +484,7 @@ app.post('/v1/user/self/pic', Authenticateuser, upload.single('profilePic'), asy
                 createdAt: new Date(),
             });
 
+            
             const responseData = {
                 file_name: newImage.file_name,
                 id: newImage.id,
@@ -502,47 +493,17 @@ app.post('/v1/user/self/pic', Authenticateuser, upload.single('profilePic'), asy
                 user_id: userId,
             };
 
+            
             const duration = Date.now() - start; 
             sendCloudWatchMetric('UserImageUploadTime', duration, 'Milliseconds'); 
             statsDClient.increment('user.Image.requests'); 
 
-
+            
             return res.status(201).json(responseData); 
         }
     } catch (error) {
         logger.error('Error uploading profile picture:', error);
-        res.status(500).json({ message: 'Server error.' });
-    }
-});
-
-        const existingImage = await Image.findOne({ where: { id: userId } });
-
-        if (existingImage) {
-           
-            return res.status(400).json({ message: 'Please delete your existing profile picture before uploading a new one.' });
-        } else {
-           
-            const newImage = await Image.create({
-                id: userId,
-                url: file.location,
-                file_name: file.originalname,
-                fileType: file.mimetype,
-                createdAt: new Date(),
-            });
-
-            const responseData = {
-                file_name: newImage.file_name,
-                id: newImage.id,
-                url: newImage.url,
-                upload_date: newImage.createdAt.toISOString().split('T')[0],
-                user_id: userId,
-            };
-
-            return res.status(201).json(responseData); 
-        }
-    } catch (error) {
-        logger.error('Error uploading profile picture:', error);
-        res.status(500).json({ message: 'Server error.' });
+        return res.status(500).json({ message: 'Server error.' });
     }
 });
 
