@@ -453,6 +453,8 @@ app.all('/v1/users/self', (req, res) => {
 app.post('/v1/user/self/pic', Authenticateuser, upload.single('profilePic'), async (req, res) => {
     const userId = req.user.id;
     const file = req.file;
+    const start = Date.now(); 
+    
 
     if (!file) {
         return res.status(400).json({ message: 'No file uploaded.' });
@@ -500,6 +502,11 @@ app.post('/v1/user/self/pic', Authenticateuser, upload.single('profilePic'), asy
                 user_id: userId,
             };
 
+            const duration = Date.now() - start; 
+            sendCloudWatchMetric('UserImageUploadTime', duration, 'Milliseconds'); 
+            statsDClient.increment('user.Image.requests'); 
+
+
             return res.status(201).json(responseData); 
         }
     } catch (error) {
@@ -542,6 +549,8 @@ app.post('/v1/user/self/pic', Authenticateuser, upload.single('profilePic'), asy
 
 app.get('/v1/user/self/pic', Authenticateuser, async (req, res) => {
     const userId = req.user.id; 
+    const start = Date.now(); 
+    
 
    
     const image = await Image.findOne({
@@ -560,11 +569,16 @@ app.get('/v1/user/self/pic', Authenticateuser, async (req, res) => {
         user_id: userId
     };
 
+    const duration = Date.now() - start; 
+    sendCloudWatchMetric('UserImagegetTime', duration, 'Milliseconds'); 
+    statsDClient.increment('user.Image.retrieval.requests'); 
+
     return res.status(200).json(responseData);
 });
 
 app.delete('/v1/user/self/pic', Authenticateuser, async (req, res) => {
     const userId = req.user.id;
+    const start = Date.now(); 
 
     try {
         const image = await Image.findOne({ where: { id: userId } });
@@ -592,7 +606,14 @@ app.delete('/v1/user/self/pic', Authenticateuser, async (req, res) => {
             return res.status(500).json({ message: 'Error deleting image from S3.' });
         }
 
+       
+
         await image.destroy();
+
+        const duration = Date.now() - start; 
+        sendCloudWatchMetric('UserImagedestroyTime', duration, 'Milliseconds'); 
+        statsDClient.increment('user.Image.Deletion.requests'); 
+        
         return res.status(204).json({ message: 'Profile picture deleted successfully.' });
 
     } catch (error) {
