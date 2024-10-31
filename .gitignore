@@ -130,6 +130,7 @@ dist
 .pnp.*
 
 #unwanted files
-.image_manifest.json
-.image_manifest.json
-.webapp.zip
+image_manifest.json
+image_manifest.json
+webapp.zip
+DS_Store
