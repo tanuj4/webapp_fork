@@ -4,14 +4,26 @@ const express = require('express');
 const axios = require('axios'); 
 const bcrypt = require('bcrypt');
 const basicAuth = require('basic-auth');
+const StatsD = require('hot-shots'); 
+const {CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch'); 
+const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
 const app = express();
 const port = process.env.PORT || 8080; 
 
+const multer = require('multer');
 
+const multerS3 = require('multer-s3');
 app.use(express.json());
 
 const { Sequelize, DataTypes } = require('sequelize');
+const logger = require('./cloudwatchlog');
+
+const statsDClient = new StatsD({ host: 'localhost', port: 8125 });
+
+const cloudwatch = new CloudWatchClient({
+    region: process.env.AWS_REGION 
+});
 
 let sequelize;
 if (process.env.NODE_ENV === 'test') {
@@ -35,6 +47,12 @@ if (process.env.NODE_ENV === 'test') {
 }
 
 const User = sequelize.define('User', {
+
+    id: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4, 
+        primaryKey: true, 
+    },
     email: {
         type: DataTypes.STRING,
         allowNull: false,
@@ -64,6 +82,94 @@ const User = sequelize.define('User', {
     timestamps: false
 });
 
+const Image = sequelize.define('Image', {
+    imageId: {
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey: true, 
+    },
+    id: {
+        type: DataTypes.UUID,
+        allowNull: false,
+        references: {
+            model: User, 
+            key: 'id',
+        }
+    },
+    url: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        unique: true,
+    },
+
+    file_name: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        unique: true,
+    },
+
+    fileType: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        validate: {
+            isIn: [['image/jpeg', 'image/png', 'image/jpg']],
+        }
+    },
+    
+    createdAt: {
+        type: DataTypes.DATE,
+        defaultValue: DataTypes.NOW
+    },
+    updatedAt: {
+        type: DataTypes.DATE,
+        defaultValue: null
+    }
+}, {
+    timestamps: true, 
+});
+
+
+const s3 = new S3Client({
+    region: 'process.env.AWS_REGION', 
+});
+
+const upload = multer({
+    storage: multerS3({
+        s3: s3,
+        bucket: process.env.S3_BUCKET, 
+        metadata: (req, file, cb) => {
+            cb(null, { fieldName: file.fieldname });
+        },
+        key: (req, file, cb) => {
+            const userId = req.user.id; 
+            cb(null, `${userId}/${file.originalname}`);
+        }
+    }),
+});
+
+
+
+
+const sendCloudWatchMetric = async (metricName, value, unit) => {
+    const params = {
+        MetricData: [
+            {
+                MetricName: metricName,
+                Value: value,
+                Unit: unit,
+            },
+        ],
+        Namespace: 'API-Metrics' 
+    };
+
+    try {
+        const command = new PutMetricDataCommand(params);
+        await cloudwatch.send(command);
+        console.log(`Successfully sent metrics to CloudWatch: ${metricName} - ${value} ${unit}`);
+    } catch (err) {
+        logger.error('Error sending metrics to CloudWatch:', err);
+    }
+};
 
 const CheckDatabaseConnection = async () => {
     
@@ -75,7 +181,7 @@ const CheckDatabaseConnection = async () => {
         await sequelize.authenticate();
         return true;
     } catch (err) {
-        console.error('Database connection error:', err);
+        logger.error('Database connection error:', err);
         return false;
     }
 };
@@ -85,7 +191,7 @@ const CheckDownstreamAPI = async () => {
         const response = await axios.get('https://jsonplaceholder.typicode.com/posts');
         return response.status === 200;
     } catch (err) {
-        console.error('Downstream API call failed:', err);
+        logger.error('Downstream API call failed:', err);
         return false;
     }
     };
@@ -102,13 +208,15 @@ const Body = req.body && Object.keys(req.body).length > 0;
         const Database_Connected = await CheckDatabaseConnection();
         const Downstream_API = await CheckDownstreamAPI();
 
+        statsDClient.increment('healthcheck.requests');
+
         if (Database_Connected && Downstream_API) {
             res.status(200).set('Cache-Control', 'no-cache').send(); 
         } else {
             res.status(503).set('Cache-Control', 'no-cache').send(); 
         }
     } catch (err) {
-        console.error('Error during health check:', err);
+        logger.error('Error during health check:', err);
         res.status(500).send();  
     }
     });
@@ -132,7 +240,7 @@ app.all('/healthz', (req, res) => {
 const CheckFields = (req) => {
         const { email, password, first_name, last_name } = req.body;
         if (!email || !password || !first_name || !last_name) {
-            console.error('All fields are required.');
+            logger.error('All fields are required.');
             return false;
         }
         const Fieldsallowed = ['email', 'password', 'first_name', 'last_name'];
@@ -140,7 +248,7 @@ const CheckFields = (req) => {
         const extra = Fieldsreceived.filter(field => !Fieldsallowed.includes(field));
         
         if (extra.length > 0) {
-            console.error('Extra fields are not allowed:', extra);
+            logger.error('Extra fields are not allowed:', extra);
             return false;
         }
     
@@ -157,7 +265,7 @@ const CheckEmail = async (email) => {
             }
             return true;  
         } catch (error) {
-            console.error('Error checking email:', error);
+            logger.error('Error checking email:', error);
             throw new Error('Database error');
         }
     };
@@ -176,7 +284,7 @@ const CheckEmail = async (email) => {
             const { id } = newUser;
             return { id, email, first_name, last_name };
         } catch (error) {
-            console.error('Error creating user:', error);
+            logger.error('Error creating user:', error);
             throw new Error('Could not create user');
         }
     };
@@ -198,6 +306,8 @@ app.post('/v1/users', async (req, res) => {
         if (!emailRegex.test(email)) {
             return res.status(400).send('check the email format.');
         }
+
+        const start = Date.now(); 
     
         try {
             const sameEmail = await CheckEmail(email);
@@ -206,55 +316,81 @@ app.post('/v1/users', async (req, res) => {
             }
     
             const newUser = await createUser(email, password, first_name, last_name);
+
+            const duration = Date.now() - start; 
+            sendCloudWatchMetric('UserCreationTime', duration, 'Milliseconds'); 
+    
+            statsDClient.increment('user.creation.requests');
+
             return res.status(201).json(newUser);
         } catch (error) {
-            console.error('Error in user creation:', error.message);
+            logger.error('Error in user creation:', error.message);
             return res.status(400).send(error.message);
         }
         
     });
 
 const Authenticateuser = async (req, res, next) => {
-        const { authorization } = req.headers;
+    const authorization = req.headers['authorization'];
+
+    if (!authorization) {
+        return res.status(401).json({ message: 'Authorization header is missing.' });
+    }
     
-        const credentials = Buffer.from(authorization.split(' ')[1], 'base64').toString('ascii');
-        const [email, password] = credentials.split(':');
-    
-        if (!email || !password) {
-            return res.status(401).json({ message: 'Email or password is missing' });
+    const credentials = Buffer.from(authorization.split(' ')[1], 'base64').toString('ascii');
+    const [email, password] = credentials.split(':');
+
+    if (!email || !password) {
+        return res.status(401).json({ message: 'Email or password is missing' });
+    }
+
+    try {
+        const user = await User.findOne({ where: { email } });
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid username' });
         }
+
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid) {
+            return res.status(401).json({ message: 'Invalid password' });
+        }
+
+        req.user = user; 
+        next();
+    } catch (error) {
+        logger.error('Authentication error:', error);
+        return res.status(500).json({ message: 'Internal server error' });
+    }
+};
+    app.get('/v1/users/self', Authenticateuser, async (req, res) => {
+        const start = Date.now();  
+    
+        const { id, email, first_name, last_name } = req.user;
     
         try {
-            const user = await User.findOne({ where: { email } });
-            if (!user) {
-                return res.status(401).json({ message: 'Invalid username' });
-            }
+            statsDClient.increment('user.retrieval.requests'); 
     
-            const isPasswordValid = await bcrypt.compare(password, user.password);
-            if (!isPasswordValid) {
-                return res.status(401).json({ message: 'Invalid password' });
-            }
+            const duration = Date.now() - start;     
+            logger.info(`User retrieval duration: ${duration} ms`);        
+            sendCloudWatchMetric('UserRetrievalTime', duration, 'Milliseconds'); 
     
-           
-            req.user = user;
-            next();
+            res.status(200).json({ id, email, first_name, last_name }); 
+            logger.info('User retrieved successfully');  
+    
         } catch (error) {
-            console.error('Authentication error:', error);
-            return res.status(500).json({ message: 'Internal server error' });
+            logger.error('Error retrieving user information:', error);
+            res.status(500).send('Internal server error');
         }
-    };
-    
-app.get('/v1/users/self', Authenticateuser, (req, res) => {
-        const { id, email, first_name, last_name } = req.user;
-        res.status(200).json({ id, email, first_name, last_name });
     });
+    
     
     app.put('/v1/users/self', Authenticateuser, async (req, res) => {
         const { first_name, last_name, password } = req.body;
     
         if (!first_name && !last_name && !password) {
-            return res.status(400).send('Nothing to update.');
+            return res.status(203).send('Nothing to update.');
         }
+        const start = Date.now();
     
         try {
             let updated = false;
@@ -283,14 +419,20 @@ app.get('/v1/users/self', Authenticateuser, (req, res) => {
             if (updated) {
                 req.user.account_updated = new Date();
                 await req.user.save();
+                const duration = Date.now() - start; 
+            sendCloudWatchMetric('UserUpdateTime', duration, 'Milliseconds'); 
+
+           
+            statsDClient.increment('user.update.requests');
+                
             } else {
-                return res.status(400).send('No changes made.');
+                return res.status(203).send('No changes made.');
             }
     
             const { id, email } = req.user;
             res.status(200).json({ id, email, first_name: req.user.first_name, last_name: req.user.last_name });
         } catch (error) {
-            console.error('Error updating user:', error);
+            logger.error('Error updating user:', error);
             res.status(500).send('Server error.');
         }
     });
@@ -308,18 +450,167 @@ app.all('/v1/users/self', (req, res) => {
         res.status(405).send();  
     }
 });
+app.post('/v1/user/self/pic', Authenticateuser, upload.single('profilePic'), async (req, res) => {
+    const userId = req.user.id;
+    const file = req.file;
+
+    if (!file) {
+        return res.status(400).json({ message: 'No file uploaded.' });
+    }
+
+    const allowedFileTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+    if (!allowedFileTypes.includes(file.mimetype)) {
+        return res.status(400).json({ message: 'Invalid file type. Only JPEG, PNG, and JPG are allowed.' });
+    }
+
+    try {
+        app.post('/v1/user/self/pic', Authenticateuser, upload.single('profilePic'), async (req, res) => {
+    const userId = req.user.id;
+    const file = req.file;
+
+    if (!file) {
+        return res.status(400).json({ message: 'No file uploaded.' });
+    }
+
+    const allowedFileTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+    if (!allowedFileTypes.includes(file.mimetype)) {
+        return res.status(400).json({ message: 'Invalid file type. Only JPEG, PNG, and JPG are allowed.' });
+    }
+
+    try {
+        const existingImage = await Image.findOne({ where: { id: userId } });
+
+        if (existingImage) {
+            return res.status(400).json({ message: 'Please delete your existing profile picture before uploading a new one.' });
+        } else {
+           
+            const newImage = await Image.create({
+                id: userId,
+                url: file.location,
+                file_name: file.originalname,
+                fileType: file.mimetype,
+                createdAt: new Date(),
+            });
+
+            const responseData = {
+                file_name: newImage.file_name,
+                id: newImage.id,
+                url: newImage.url,
+                upload_date: newImage.createdAt.toISOString().split('T')[0],
+                user_id: userId,
+            };
+
+            return res.status(201).json(responseData); 
+        }
+    } catch (error) {
+        logger.error('Error uploading profile picture:', error);
+        res.status(500).json({ message: 'Server error.' });
+    }
+});
+
+        const existingImage = await Image.findOne({ where: { id: userId } });
+
+        if (existingImage) {
+           
+            return res.status(400).json({ message: 'Please delete your existing profile picture before uploading a new one.' });
+        } else {
+           
+            const newImage = await Image.create({
+                id: userId,
+                url: file.location,
+                file_name: file.originalname,
+                fileType: file.mimetype,
+                createdAt: new Date(),
+            });
+
+            const responseData = {
+                file_name: newImage.file_name,
+                id: newImage.id,
+                url: newImage.url,
+                upload_date: newImage.createdAt.toISOString().split('T')[0],
+                user_id: userId,
+            };
+
+            return res.status(201).json(responseData); 
+        }
+    } catch (error) {
+        logger.error('Error uploading profile picture:', error);
+        res.status(500).json({ message: 'Server error.' });
+    }
+});
+
+
+app.get('/v1/user/self/pic', Authenticateuser, async (req, res) => {
+    const userId = req.user.id; 
+
+   
+    const image = await Image.findOne({
+        where: { id: userId }
+    });
+
+    if (!image) {
+        return res.status(404).json({ message: 'No profile image found.' });
+    }
+
+    const responseData = {
+        file_name: image.file_name,
+        id: image.id,
+        url: image.url,
+        upload_date: image.createdAt.toISOString().split('T')[0],
+        user_id: userId
+    };
+
+    return res.status(200).json(responseData);
+});
+
+app.delete('/v1/user/self/pic', Authenticateuser, async (req, res) => {
+    const userId = req.user.id;
+
+    try {
+        const image = await Image.findOne({ where: { id: userId } });
+        
+        if (!image) {
+            return res.status(404).json({ message: 'No profile picture found to delete.' });
+        }
+
+      
+        console.log("Bucket Name:", process.env.S3_BUCKET_NAME);
+        console.log("Key:", `${userId}/${image.file_name}`);
+        console.log("User ID:", userId);
+        console.log("Image File Name:", image.file_name);
+
+        const deleteParams = {
+            Bucket: process.env.S3_BUCKET,
+            Key: `${userId}/${image.file_name}`,
+        };
+
+        try {
+            await s3.send(new DeleteObjectCommand(deleteParams));
+            logger.info(`Successfully deleted image from S3: ${image.file_name}`);
+        } catch (s3Error) {
+            logger.error('Error deleting image from S3:', s3Error);
+            return res.status(500).json({ message: 'Error deleting image from S3.' });
+        }
+
+        await image.destroy();
+        return res.status(204).json({ message: 'Profile picture deleted successfully.' });
+
+    } catch (error) {
+        logger.error('Error deleting profile picture:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
 
 
 app.listen(port, async () => {
         try {
             await sequelize.sync({ force: true });
-    console.log(`Health check API listening at http://localhost:${port}`);
+    logger.info(`Health check API listening at http://localhost:${port}`);
         }
         catch (error) {
-            console.error('Failed to sync database:', error);
+            logger.error('Failed to sync database:', error);
         }
     })
 
 module.exports = { app, sequelize, User };
-
-  
