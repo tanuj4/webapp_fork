@@ -7,6 +7,7 @@ const basicAuth = require('basic-auth');
 const StatsD = require('hot-shots'); 
 const {CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch'); 
 const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const port = process.env.PORT || 8080; 
@@ -105,7 +106,7 @@ const Image = sequelize.define('Image', {
     file_name: {
         type: DataTypes.STRING,
         allowNull: false,
-        unique: true,
+        //unique: true,
     },
 
     fileType: {
