@@ -591,7 +591,7 @@ app.all('/v1/user/self/pic', (req, res) => {
 
 app.listen(port, async () => {
         try {
-            await sequelize.sync({ force: true });
+            await sequelize.sync();
     logger.info(`Health check API listening at http://localhost:${port}`);
         }
         catch (error) {
