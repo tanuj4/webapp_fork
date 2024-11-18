@@ -88,27 +88,12 @@ jobs:
         run: |
             aws --version
             aws ec2 describe-launch-templates
-            aws ec2 create-launch-template-version --launch-template-data '{"ImageId":"${{ env.AMI_ID }}"}' --source-version 1 --launch-template-name ${{ secrets.LAUNCH_TEMPLATE_NAME }}
+            aws ec2 create-launch-template-version \
+            --launch-template-data '{"ImageId":"${{ env.AMI_ID }}"}' \
+            --source-version 1 \
+            --launch-template-name ${{ secrets.LAUNCH_TEMPLATE_NAME }}
   
       - name: Instance Refresh in autoscaling group
         run: "aws autoscaling start-instance-refresh --auto-scaling-group-name ${{ secrets.AUTO_SCALING_GROUP_NAME }}"
 
-      - name: Wait for Instance Refresh to Complete
-        run: |
-          REFRESH_STATUS="InProgress"
-          while [ "$REFRESH_STATUS" == "InProgress" ]; do
-            echo "Waiting for instance refresh to complete..."
-            REFRESH_STATUS=$(aws autoscaling describe-instance-refreshes \
-              --auto-scaling-group-name ${{ secrets.AUTO_SCALING_GROUP_NAME }} \
-              --query 'InstanceRefreshes[0].Status' \
-              --output text)
-            sleep 30  # Wait for 30 seconds before checking again
-          done
-
-          if [ "$REFRESH_STATUS" == "Successful" ]; then
-            echo "Instance refresh completed successfully."
-          else
-            echo "Instance refresh failed."
-            exit 1  # Fail the workflow if the refresh was not successful
-          fi
-     
+    
