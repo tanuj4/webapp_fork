@@ -133,4 +133,4 @@ dist
 image_manifest.json
 image_manifest.json
 webapp.zip
-DS_Store
+.DS_Store
