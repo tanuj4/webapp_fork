@@ -1,5 +1,5 @@
 on:
-  push:
+  pull_request:
     branches:
      - main
 
@@ -96,4 +96,25 @@ jobs:
       - name: Instance Refresh in autoscaling group
         run: "aws autoscaling start-instance-refresh --auto-scaling-group-name ${{ secrets.AUTO_SCALING_GROUP_NAME }}"
 
-    
+      - name: Wait for Instance Refresh to Complete
+        run: |
+          REFRESH_STATUS="InProgress"
+          while [ "$REFRESH_STATUS" == "InProgress" ]; do
+            echo "Waiting for instance refresh to complete..."
+            REFRESH_STATUS=$(aws autoscaling describe-instance-refreshes \
+              --auto-scaling-group-name ${{ secrets.AUTO_SCALING_GROUP_NAME }} \
+              --query 'InstanceRefreshes[0].Status' \
+              --output text \
+              --region ${{ secrets.AWS_REGION }})
+            sleep 30  # Wait for 30 seconds before checking again
+          done
+
+          if [ "$REFRESH_STATUS" == "Successful" ]; then
+            echo "Instance refresh completed successfully."
+          elif [ "$REFRESH_STATUS" == "Failed" ]; then
+            echo "Instance refresh failed."
+            exit 1  # Exit with error if refresh fails
+          else
+            echo "Unexpected status: $REFRESH_STATUS"
+            exit 1
+          fi
