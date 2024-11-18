@@ -1,5 +1,5 @@
 on:
-  pull_request:
+  push:
     branches:
      - main
 
@@ -98,7 +98,7 @@ jobs:
 
       - name: Wait for instance refresh to complete
         run: |
-          REFRESH_STATUS="Pending"  # Start with a default status
+          REFRESH_STATUS="Pending"  
           while [ "$REFRESH_STATUS" == "Pending" ] || [ "$REFRESH_STATUS" == "InProgress" ]; do
             echo "Waiting for instance refresh to complete (current status: $REFRESH_STATUS)..."
             REFRESH_STATUS=$(aws autoscaling describe-instance-refreshes \
@@ -106,14 +106,14 @@ jobs:
               --query 'InstanceRefreshes[0].Status' \
               --output text \
               --region ${{ secrets.AWS_REGION }})
-            sleep 30  # Wait for 30 seconds before checking again
+            sleep 30  
           done
 
           if [ "$REFRESH_STATUS" == "Successful" ]; then
             echo "Instance refresh completed successfully."
           elif [ "$REFRESH_STATUS" == "Failed" ]; then
             echo "Instance refresh failed."
-            exit 1  # Exit with error if refresh fails
+            exit 1  
           else
             echo "Unexpected status: $REFRESH_STATUS"
             exit 1
