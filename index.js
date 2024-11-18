@@ -8,6 +8,7 @@ const StatsD = require('hot-shots');
 const {CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch'); 
 const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { v4: uuidv4 } = require('uuid');
+const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns'); 
 
 const app = express();
 const port = process.env.PORT || 8080; 
@@ -25,6 +26,11 @@ const statsDClient = new StatsD({ host: 'localhost', port: 8125 });
 const cloudwatch = new CloudWatchClient({
     region: process.env.AWS_REGION 
 });
+
+const snsClient = new SNSClient({
+    region: process.env.AWS_REGION 
+});
+
 
 let sequelize;
 if (process.env.NODE_ENV === 'test') {
@@ -70,6 +76,20 @@ const User = sequelize.define('User', {
     password: {
         type: DataTypes.STRING,
         allowNull: false
+    },
+    is_email_verified: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false
+    },
+    verification_token: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        unique: true
+    },
+    verification_token_expires: {
+        type: DataTypes.DATE,
+        allowNull: true,
     },
     account_created: {
         type: DataTypes.DATE,
@@ -130,6 +150,29 @@ const Image = sequelize.define('Image', {
 });
 
 
+const EmailLogs = sequelize.define('EmailData', {
+    email: {
+        type: DataTypes.STRING,
+        allowNull: false,
+    },
+    verificationLink: {
+        type: DataTypes.STRING,
+        allowNull: false,
+    },
+    status: {
+        type: DataTypes.STRING,
+        allowNull: false,
+    },
+    sentDate: {
+        type: DataTypes.DATE,
+        allowNull: false,
+    },
+}, {
+    tableName: 'EmailData',
+    timestamps: false,
+});
+
+
 const s3 = new S3Client({
     region: process.env.AWS_REGION, 
 });
@@ -172,6 +215,14 @@ const sendCloudWatchMetric = async (metricName, value, unit) => {
     }
 };
 
+const QueryParams = (req, res, next) => {
+    if (Object.keys(req.query).length > 0) {
+        return res.status(400).send('Query parameters are not allowed.');
+    }
+    next();
+};
+
+
 const CheckDatabaseConnection = async () => {
     
     if (process.env.NODE_ENV === 'test') {
@@ -197,7 +248,7 @@ const CheckDownstreamAPI = async () => {
     }
     };
 
-app.get('/healthz', async (req, res) => {
+app.get('/healthz',QueryParams, async (req, res) => {
 const Request = req.method === 'GET';
 const Body = req.body && Object.keys(req.body).length > 0;
 
@@ -222,15 +273,7 @@ const Body = req.body && Object.keys(req.body).length > 0;
     }
     });
     
-    const QueryParams = (req, res, next) => {
-        if (Object.keys(req.query).length > 0) {
-            return res.status(400).send('Query parameters are not allowed.');
-        }
-        next();
-    };
-    
-    app.use(QueryParams);
-    
+ 
 app.all('/healthz', (req, res) => {
     const Method_not_allowed = req.method !== 'GET';
     if (Method_not_allowed) {
@@ -292,7 +335,7 @@ const CheckEmail = async (email) => {
   
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     
-app.post('/v1/users', async (req, res) => {
+app.post('/v1/users', QueryParams, async (req, res) => {
         const fieldsValid = CheckFields(req);
         if (!fieldsValid) {
             return res.status(400).send('All fields are required or create only the given fields.');
@@ -317,6 +360,24 @@ app.post('/v1/users', async (req, res) => {
             }
     
             const newUser = await createUser(email, password, first_name, last_name);
+
+            const topicArn = process.env.SNS_TOPIC_ARN;
+            const messagePayload = {
+                firstName: newUser.first_name,
+                lastName: newUser.last_name,
+                email: newUser.email,
+            };
+    
+            try {
+                const command = new PublishCommand({
+                    Message: JSON.stringify(messagePayload),
+                    TopicArn: topicArn,
+                });
+                const publishResponse = await snsClient.send(command);
+                logger.info(`MessageId ${publishResponse.MessageId} published to topic ${topicArn}`);
+            } catch (err) {
+                logger.warn(`Failed to publish Message to topic ${topicArn}: ${err.message}`);
+            }
 
             const duration = Date.now() - start; 
             sendCloudWatchMetric('UserCreationTime', duration, 'Milliseconds'); 
@@ -356,6 +417,14 @@ const Authenticateuser = async (req, res, next) => {
             return res.status(401).json({ message: 'Invalid password' });
         }
 
+        if (!user.is_email_verified) {
+            logger.warn(`Email not verified for username: ${user.email}`);
+            return res.status(403).json({
+                message: 'Email not verified. Please verify your email to proceed.'
+            });
+        }
+
+
         req.user = user; 
         next();
     } catch (error) {
@@ -363,7 +432,7 @@ const Authenticateuser = async (req, res, next) => {
         return res.status(500).json({ message: 'Internal server error' });
     }
 };
-    app.get('/v1/users/self', Authenticateuser, async (req, res) => {
+    app.get('/v1/users/self', Authenticateuser, QueryParams, async (req, res) => {
         const start = Date.now();  
     
         const { id, email, first_name, last_name } = req.user;
@@ -385,7 +454,7 @@ const Authenticateuser = async (req, res, next) => {
     });
     
     
-    app.put('/v1/users/self', Authenticateuser, async (req, res) => {
+    app.put('/v1/users/self', Authenticateuser, QueryParams, async (req, res) => {
         const { first_name, last_name, password } = req.body;
     
         if (!first_name && !last_name && !password) {
@@ -445,6 +514,45 @@ app.all('/v1/users', (req, res) => {
     }
 });
 
+app.get('/v1/user/checkemail', async (req, res) => {
+
+    const token = req.query.token;
+    if(!token)
+    {
+        logger.error(`The Token is missing in the API:  ${req.originalUrl}`);
+        return res.status(400).send();
+    }
+    try {
+        const user = await User.findOne({
+            where: {
+                verification_token: token
+            }
+        });
+        if (!user) {
+            logger.warn('Token doesnt match or the API is missing')
+            return res.status(400).json({message:"Invalid veriffication Link"}).send();
+        }
+        if(new Date() > user.verification_token_expires)
+        {
+            logger.warn('Verification Link Expired');
+            return res.status(400).json({message:"Verification link has expired."}).send();
+        }
+        user.is_email_verified = true;
+        user.verification_token = null;
+        user.verification_token_expires = null;
+        await user.save();
+
+        logger.info(`Email Verified for Username: ${user.username}`);
+        return res.status(200).json({message:"Your email has been successfully verified"}).send();
+    }
+    catch (err){
+        logger.error(`Email Verification Failed: ${err}`);
+        return res.status(500).json({
+            message: "Internal server error"
+        });
+    }
+})
+
 app.all('/v1/users/self', (req, res) => {
     const Method_not_allowed3 = req.method !== 'PUT' && req.method !== 'GET';
     if (Method_not_allowed3) {
@@ -452,7 +560,7 @@ app.all('/v1/users/self', (req, res) => {
     }
 });
 
-app.post('/v1/user/self/pic', Authenticateuser, upload.single('profilePic'), async (req, res) => {
+app.post('/v1/user/self/pic', Authenticateuser, QueryParams, upload.single('profilePic'), async (req, res) => {
     const userId = req.user.id;
     const file = req.file;
     const start = Date.now(); 
@@ -509,7 +617,7 @@ app.post('/v1/user/self/pic', Authenticateuser, upload.single('profilePic'), asy
 });
 
 
-app.get('/v1/user/self/pic', Authenticateuser, async (req, res) => {
+app.get('/v1/user/self/pic', Authenticateuser, QueryParams, async (req, res) => {
     const userId = req.user.id; 
     const start = Date.now(); 
     
@@ -538,7 +646,7 @@ app.get('/v1/user/self/pic', Authenticateuser, async (req, res) => {
     return res.status(200).json(responseData);
 });
 
-app.delete('/v1/user/self/pic', Authenticateuser, async (req, res) => {
+app.delete('/v1/user/self/pic', Authenticateuser, QueryParams, async (req, res) => {
     const userId = req.user.id;
     const start = Date.now(); 
 
