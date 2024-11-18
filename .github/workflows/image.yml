@@ -96,4 +96,25 @@ jobs:
       - name: Instance Refresh in autoscaling group
         run: "aws autoscaling start-instance-refresh --auto-scaling-group-name ${{ secrets.AUTO_SCALING_GROUP_NAME }}"
 
-    
+      - name: Wait for instance refresh to complete
+        run: |
+          REFRESH_STATUS="Pending"  
+          while [ "$REFRESH_STATUS" == "Pending" ] || [ "$REFRESH_STATUS" == "InProgress" ]; do
+            echo "Waiting for instance refresh to complete (current status: $REFRESH_STATUS)..."
+            REFRESH_STATUS=$(aws autoscaling describe-instance-refreshes \
+              --auto-scaling-group-name ${{ secrets.AUTO_SCALING_GROUP_NAME }} \
+              --query 'InstanceRefreshes[0].Status' \
+              --output text \
+              --region ${{ secrets.AWS_REGION }})
+            sleep 30  
+          done
+
+          if [ "$REFRESH_STATUS" == "Successful" ]; then
+            echo "Instance refresh completed successfully."
+          elif [ "$REFRESH_STATUS" == "Failed" ]; then
+            echo "Instance refresh failed."
+            exit 1  
+          else
+            echo "Unexpected status: $REFRESH_STATUS"
+            exit 1
+          fi
