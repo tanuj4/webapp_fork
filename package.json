@@ -2,6 +2,7 @@
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.682.0",
     "@aws-sdk/client-s3": "^3.682.0",
+    "@aws-sdk/client-sns": "^3.693.0",
     "app-root-path": "^3.1.0",
     "aws-sdk": "^2.1691.0",
     "axios": "^1.7.7",
