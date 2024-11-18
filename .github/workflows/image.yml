@@ -1,7 +1,7 @@
 on:
-  push:
+  pull_request:
     branches:
-      - main
+     - main
 
 jobs:
   build:
@@ -40,7 +40,6 @@ jobs:
             -var "subnet_id=${{ secrets.SUBNET_ID }}" \
             ./main.pkr.hcl
 
-
       - name: Check the content of image_manifest.json
         run: cat image_manifest.json
 
@@ -77,3 +76,20 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
+
+      - name:  Setting up demo environment
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+            aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_DEMO}}
+            aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_DEMO}}
+            aws-region: ${{ secrets.AWS_REGION }}
+            
+      - name:  Configuring the launch template
+        run: |
+            aws --version
+            aws ec2 describe-launch-templates
+            aws ec2 create-launch-template-version --launch-template-data '{"ImageId":"${{ env.AMI_ID }}"}' --source-version 1 --launch-template-name ${{ secrets.LAUNCH_TEMPLATE_NAME }}
+  
+      - name: Instance Refresh in autoscaling group
+        run: "aws autoscaling start-instance-refresh --auto-scaling-group-name ${{ secrets.AUTO_SCALING_GROUP_NAME }}"
+     
