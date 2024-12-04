@@ -248,7 +248,7 @@ const CheckDownstreamAPI = async () => {
     }
     };
 
-app.get('/healthz',QueryParams, async (req, res) => {
+app.get('/CICD',QueryParams, async (req, res) => {
 const Request = req.method === 'GET';
 const Body = req.body && Object.keys(req.body).length > 0;
 
@@ -274,7 +274,7 @@ const Body = req.body && Object.keys(req.body).length > 0;
     });
     
  
-app.all('/healthz', (req, res) => {
+app.all('/CICD', (req, res) => {
     const Method_not_allowed = req.method !== 'GET';
     if (Method_not_allowed) {
         res.status(405).send();  
